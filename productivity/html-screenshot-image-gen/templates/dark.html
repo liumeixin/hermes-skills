@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 1080px;
+      background: #0d0d0d;
+      padding: 60px;
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+    .card {
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 56px;
+    }
+    h1 {
+      color: #ffffff;
+      font-size: 42px;
+      font-weight: 800;
+      margin-bottom: 40px;
+    }
+    h1 span {
+      color: #4ade80;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 56px;
+      font-weight: 800;
+      color: #4ade80;
+      line-height: 1.2;
+    }
+    .stat-label {
+      font-size: 18px;
+      color: #888;
+      margin-top: 8px;
+    }
+    .conclusion {
+      font-size: 24px;
+      color: #ccc;
+      line-height: 1.8;
+      text-align: center;
+      padding: 30px;
+      background: #1a1a1a;
+      border-radius: 12px;
+      border-left: 4px solid #4ade80;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 16px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>{{TITLE}}</h1>
+    {{STATS}}
+    {{CONCLUSION}}
+    <div class="footer">{{BRAND}}</div>
+  </div>
+</body>
+</html>

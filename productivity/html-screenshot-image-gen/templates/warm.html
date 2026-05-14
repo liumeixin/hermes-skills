@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 1080px;
+      background: #f5f0e8;
+      padding: 60px;
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+    .card {
+      background: #fffdf8;
+      border-radius: 20px;
+      padding: 50px;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.06);
+    }
+    .title {
+      font-size: 38px;
+      font-weight: 800;
+      color: #8b6f47;
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    .step-list {
+      list-style: none;
+    }
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 24px;
+      font-size: 22px;
+      color: #333;
+      line-height: 1.6;
+    }
+    .step-num {
+      background: #8b6f47;
+      color: white;
+      border-radius: 50%;
+      width: 42px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 20px;
+      margin-right: 20px;
+      flex-shrink: 0;
+    }
+    .step-text {
+      flex: 1;
+      padding-top: 6px;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 16px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 class="title">{{TITLE}}</h1>
+    <ol class="step-list">
+      {{STEPS}}
+    </ol>
+    <div class="footer">{{BRAND}}</div>
+  </div>
+</body>
+</html>

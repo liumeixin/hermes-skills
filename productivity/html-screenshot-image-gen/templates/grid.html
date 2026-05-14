@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1200">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 1200px;
+      background: #1a1a2e;
+      padding: 50px;
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+    .card {
+      background: #16213e;
+      border-radius: 20px;
+      padding: 50px;
+      overflow: hidden;
+    }
+    .title {
+      font-size: 36px;
+      font-weight: 800;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .title span {
+      color: #e94560;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+    }
+    .column {
+      background: #1a1a2e;
+      border-radius: 16px;
+      padding: 36px;
+    }
+    .column.left { border-top: 4px solid #4ade80; }
+    .column.right { border-top: 4px solid #e94560; }
+    .column-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .column.left .column-title { color: #4ade80; }
+    .column.right .column-title { color: #e94560; }
+    .item-list {
+      list-style: none;
+    }
+    .item {
+      font-size: 20px;
+      color: #ccc;
+      line-height: 1.8;
+      padding: 8px 0;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .item:last-child { border-bottom: none; }
+    .item::before {
+      content: '✓ ';
+      color: #4ade80;
+    }
+    .column.right .item::before {
+      content: '✗ ';
+      color: #e94560;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 16px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1 class="title">{{TITLE}}</h1>
+    <div class="grid">
+      <div class="column left">
+        <h2 class="column-title">优势</h2>
+        <ul class="item-list">{{LEFT_ITEMS}}</ul>
+      </div>
+      <div class="column right">
+        <h2 class="column-title">劣势</h2>
+        <ul class="item-list">{{RIGHT_ITEMS}}</ul>
+      </div>
+    </div>
+    <div class="footer">{{BRAND}}</div>
+  </div>
+</body>
+</html>
