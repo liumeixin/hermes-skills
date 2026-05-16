@@ -123,6 +123,53 @@ hermes gateway run --replace
   PATH="/opt/hermes/.venv/bin:$PATH" hermes gateway status
   ```
 
+## 对话"失忆"排查（上下文压缩故障）
+
+### 症状
+在飞书群聊中跟 Agent 对话，聊了几轮后突然"忘记"之前的内容。表现：
+- 刚交代的任务下一轮就不记得了
+- 问它之前的进展，回答"请提供更多信息"
+- 频率很高，不是偶发
+
+### 根因
+**推理模型（reasoning/thinking model）做压缩摘要会报错，导致会话被 auto-reset。**
+
+排查路径：
+1. 打开日志 `grep -i 'compress\|Failed.*summary\|auto-reset\|exhaustion' /opt/data/logs/agent.log`
+2. 如果看到 `Failed to get summary response: Error code: 400 'The reasoning_content in the thinking mode must be passed back to the API.'` → 就是这个问题
+3. 如果看到 `Context compression failed after 3 attempts. Auto-resetting session after compression exhaustion.` → 确认
+
+### 原理
+- Hermes 的上下文压缩在 token 达到阈值时触发，调用 auxiliary 模型对中间轮次生成摘要
+- 如果 auxiliary.compression 配置为 `auto`，系统会用主模型做摘要
+- 主模型是推理模型（mimo-v2.5、DeepSeek-R1、QwQ 等）时，Xiaomi/各厂商 API 要求调用时必须传回上一轮的 `reasoning_content`
+- 压缩摘要是独立的单轮调用，不携带历史 reasoning_content → API 400 → 重试 3 次失败 → compression_exhausted → auto-reset → 上下文清零
+
+### 修复
+在 `config.yaml` 中给压缩任务指定独立的非推理模型：
+
+```yaml
+auxiliary:
+  compression:
+    provider: zhipuai          # 不要用 auto
+    model: glm-4.5-flash       # 非推理模型，做摘要没问题
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: GLM_API_KEY   # 从 .env 读取
+    timeout: 120
+```
+
+同时建议调整压缩参数：
+```yaml
+compression:
+  threshold: 0.75        # 从 0.5 调高，减少触发频率
+  protect_last_n: 30     # 从 20 调高，保护更多近期消息
+```
+
+### 注意
+- 配置改了但已有会话不会重新读取，需要 `/new` 或等自动重置
+- `auto` 辅助模型选择在主模型是推理模型时不可靠，必须显式指定
+- 知识库页面：`wiki/概念/Hermes上下文压缩导致对话遗忘.md`
+
 ## 定时任务投递失败排查
 
 ### 症状

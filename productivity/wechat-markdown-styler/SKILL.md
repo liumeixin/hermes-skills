@@ -58,7 +58,7 @@ wenyan-editor/                    # GitHub 仓库根目录
 | **typography** | 排版（字号/行高/字间距/字体）🆕 |
 
 ### 17 个内置主题
-claude, cli, color-pop, cyber, **dark-green**🆕, default, fireworks, girl-pink, grass, lavender-purple, macarons, newyear, notebook-purple🆕, parrotalk, purple-yellow-pop, sunrise, winter
+claude, cli, color-pop, cyber, dark-green, default, fireworks, girl-pink, grass, lavender-purple, macarons, newyear, notebook-blue🆕, notebook-purple, parrotalk, purple-yellow-pop, sunrise, winter
 
 ### 8 个 API
 | 接口 | 方法 | 说明 |
@@ -105,16 +105,43 @@ Push 到 main → 自动构建 Docker 镜像 → 推送到 GHCR
 
 ## 微信公众号复制修复
 
-### 根因
+### 问题 1：style 标签不支持
 `parse_markdown_for_wechat` 输出混入 `<style>` 标签，微信不支持。
 
-### 修复
 ```python
 # 开头强制移除所有 <style> 标签
 html = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
 # <div id="wenyan"> 加内联样式
 html = re.sub(r'<div id="wenyan">', '<div id="wenyan" style="max-width:700px;...">', html)
 ```
+
+### 问题 2：复制按钮粘贴出纯文本代码（2026-05-16 修复）
+**根因**：`copyHtml()` 用 `navigator.clipboard.writeText(fullHtml)` 复制 HTML，但 `writeText()` 把 HTML 当 **text/plain** 放入剪贴板。公众号编辑器粘贴时识别为纯文本，所以显示为代码。
+
+**修复**：改用 selection + `execCommand('copy')`，浏览器会将选区的渲染 HTML 以 **text/html** MIME 写入剪贴板：
+
+```javascript
+// 核心思路：创建临时 div → 渲染 HTML → 选中 → 复制
+const tmp = document.createElement('div');
+tmp.innerHTML = fullHtml;
+tmp.style.position = 'fixed';
+tmp.style.left = '-9999px';
+document.body.appendChild(tmp);
+
+const range = document.createRange();
+range.selectNodeContents(tmp);
+const sel = window.getSelection();
+sel.removeAllRanges();
+sel.addRange(range);
+
+let ok = false;
+try { ok = document.execCommand('copy'); } catch (e) {}
+sel.removeAllRanges();
+document.body.removeChild(tmp);
+// fallback: ClipboardItem with text/html MIME
+```
+
+**涉及文件**：`frontend/standalone.html` 和 `frontend/index.html` 的 `copyHtml()` 函数。两个文件要同步修改。
 
 ## dimensions.json 结构（重要！）
 
@@ -211,17 +238,81 @@ build.py 通过选择器正则将 CSS 块分类到 18 个维度：
 | footnote | `.footnote`, `#footnotes`, `.footnote-num/txt` |
 | spacing | `#wenyan p`（仅 letter-spacing） |
 
+### 手机预览模式（2026-05-16 新增）
+
+预览栏有「📱 手机」按钮，点击切换 375px 手机外壳模拟：
+
+- **实现**：动态创建 `.phone-frame` div（圆角 32px + 刘海 + 状态栏），将 `#wenyan` 移入
+- **CSS 关键**：`#preview-scroll.phone-mode #wenyan { max-width: 100% !important; }` 覆盖默认 700px
+- **切换逻辑**：`togglePhonePreview()` 函数在 `standalone.html` 和 `index.html` 中同步实现
+- **涉及文件**：`frontend/standalone.html`、`frontend/index.html`（CSS + HTML 按钮 + JS 函数）
+
+## 微信公众号背景兼容性（2026-05-16 最终结论）
+
+**核心结论**：微信公众号编辑器**只支持 `background-color`（纯色）**，所有背景图方案都会被剥离。
+
+**三种方案全部验证失败**：
+| 方案 | 结果 | 原因 |
+|------|------|------|
+| `background-image: linear-gradient(...)` inline style | ❌ | 微信不支持该 CSS 属性 |
+| SVG data URI → 内联 `<svg>` 元素 | ❌ | 微信粘贴时剥离 `<svg>` 标签 |
+| `<style>` 标签内 CSS | ❌ | 微信直接剥掉 `<style>` 标签 |
+
+**微信支持的背景 CSS（实测确认）**：
+| 属性 | 支持 | 说明 |
+|------|------|------|
+| `background-color` | ✅ | 唯一可用的背景方案 |
+| `background-image` (任何形式) | ❌ | linear-gradient、SVG data URI 均不支持 |
+| `border`, `border-radius`, `box-shadow` | ✅ | 装饰性属性可用 |
+
+**xhs.pro 的真实行为**：
+- 源码 `getExportHtml()` 主动调用 `removeProperty("background-image")` 剥离所有背景图
+- 网格/图案背景**仅用于编辑器预览和小红书图片生成**，不进公众号
+- 公众号粘贴后背景也会丢失，和我们的 wenyan 一样
+
+**copyHtml() 最终实现**（仅提取 background-color）：
+```javascript
+// 只提取 background-color 和 padding，跳过 background-image
+const bgProps = ['background-color', 'padding'];
+```
+
+**涉及文件**：`frontend/standalone.html` 和 `frontend/index.html` 的 `copyHtml()` 函数。两文件同步修改。
+
+### Flask 304 缓存问题（2026-05-16）
+
+Flask 开发服务器默认不设 `Cache-Control`，浏览器会缓存 JSON 文件。更新 CSS/主题后前端仍显示旧版本。
+
+**修复**：在 `app.py` 的 `after_request` 中对 JSON 文件加 no-cache 头：
+```python
+@app.after_request
+def after_request(response):
+    if request.path.endswith('.json'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+```
+
+### 剪贴板 API 调试注意
+
+- `document.addEventListener('copy', ...)` 只能拦截 `document.execCommand('copy')`，**不能**拦截 `navigator.clipboard.write()`
+- 用 `navigator.clipboard.read()` 读剪贴板需要页面焦点，控制台直接调会报 `NotAllowedError`
+- 调试 xhs.pro 等使用 Clipboard API 的站点，需要覆盖 `navigator.clipboard.write` 原型
+
 ### 常见问题
 
 ### Flask 找不到模块
 venv 里没装 flask → `/opt/hermes/.venv/bin/python3 -m pip install flask`
 
 ### Git push 失败 "could not read Password"
-Token 过期或未配置 → 重新生成 GitHub PAT（需 `repo` scope）→ 更新 remote URL：
+Token 过期或未配置。**用 `/opt/data/workspace/Projects/wenyan-editor`（remote URL 内嵌 token），不要用 `/tmp` 克隆的副本。**
 ```bash
-git remote set-url origin "https://liumeixin:${TOKEN}@github.com/liumeixin/wenyan-editor.git"
+# 正确路径（有 token）
+cd /opt/data/workspace/Projects/wenyan-editor
+# 从 /tmp 复制改动过去再 push
+cp /tmp/wenyan-editor/wenyan-data/static/css/themes/XXX.css wenyan-data/static/css/themes/
+cp /tmp/wenyan-editor/frontend/{build.py,themes.json,dimensions.json,manifest.json} frontend/
+git add -A && git commit -m "..." && git push origin main
 ```
-或用 SSH key（需先 `ssh-keygen` + 添加到 GitHub Settings → Keys）
+⚠️ `/opt/data/.env` 里的 `GITHUB_TOKEN` 已过期，不能用于 API 调用（401）。检查 CI 状态用公开 API 无 auth 即可（public repo）。如需 API 访问，重新生成 PAT 并更新 remote URL。
 
 ### __pycache__ 导致旧代码
 `rm -rf __pycache__` 后重启
