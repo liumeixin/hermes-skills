@@ -47,6 +47,28 @@ hermes gateway run --replace &
 
 注意：新进程会拉起后在前台运行，加 `&` 放入后台。
 
+### ⚠️ PID 1 环境下的陷阱
+
+**症状**：`hermes gateway run --replace` 报错 `OSError: [Errno 98] address already in use on port 18643`
+
+**原因**：Hermes 本身就是容器的 PID 1（init 进程），已经绑定了端口，`--replace` 无法重复绑定。
+
+**表现**：
+- `ps aux | grep hermes` 显示 PID 1 正在运行 `hermes gateway run`
+- 多次 `hermes gateway restart` 会产生大量 defunct 僵尸进程
+- 原 Hermes 仍然正常运行，飞书连接不断
+
+**处理方式**：
+1. **配置变更（.env、auxiliary_client.py 等）不需要重启**——下次 API 调用时自动生效
+2. 如果必须重启（比如要加载全新代码），在 NAS 宿主机上执行：
+   ```bash
+   docker restart hermes
+   ```
+3. 清理僵尸进程（无害但难看）：
+   ```bash
+   kill -9 <zombie_pid>  # 僵尸进程的 PPID 已被 PID 1 回收，无需处理
+   ```
+
 ## 飞书平台代码关键位置
 
 文件：`/opt/hermes/gateway/platforms/feishu.py`
@@ -71,10 +93,25 @@ hermes gateway run --replace &
 
 ## 热修改代码后生效
 
-修改 `feishu.py` 等平台代码后，必须重启网关才能生效：
+修改以下内容后，**不需要重启 Hermes**，下次 API 调用时自动生效：
+- `config.yaml` 配置变更
+- `.env` 中的 API endpoint 修改（如 `XIAOMI_BASE_URL`）
+- `auxiliary_client.py` 中的模型映射
+
+只有修改飞书平台代码（`feishu.py`）后，才需要重启：
 ```bash
 hermes gateway run --replace
 ```
+
+## 重启注意事项：僵尸进程循环
+
+**危险操作序列**：`hermes gateway run --replace` 如果端口被占用（`address already in use`），会报端口冲突并退出，但原进程（PID 1）仍在跑。反复执行会产生多个 defunct 进程并耗尽终端 TTY，导致**所有前台命令永久卡住**（exit code 130）。
+
+**正确做法**：
+1. 先 `ps aux | grep hermes | grep -v grep` 确认是否有残留进程
+2. 如果有 defunct + restart 进程，用 `kill -9 <PID>` 清理掉再重启
+3. 如果终端已经卡住，用 `process(action='list')` → `process(action='kill', session_id='xxx')` 逐个杀残留 session
+4. `pgrep -a hermes` 可以绕过 TTY 阻塞快速确认进程状态
 
 ## Hermes 路径与环境（容器/Docker 环境）
 

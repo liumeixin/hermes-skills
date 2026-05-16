@@ -74,7 +74,7 @@ vision_analyze(
 在 `agent/auxiliary_client.py` 中添加：
 ```python
 _PROVIDER_VISION_MODELS: Dict[str, str] = {
-    "xiaomi": "mimo-v2-omni",
+    "xiaomi": "mimo-v2.5",  # Token Plan 多模态（免费）
     "zai": "glm-5v-turbo",
     "minimax-cn": "MiniMax-m2.7",  # 注意：不是 M2.7-multimodal！
 }
@@ -173,7 +173,122 @@ print(f'Provider: {provider}, Client: {type(client).__name__}, Model: {model}')
 
 ---
 
-## 添加自定义 OCR 服务
+## 智谱 GLM-4V-Flash（免费替代方案）
+
+### 背景
+智谱 AI 提供完全免费的图像理解模型 **GLM-4V-Flash**，无需信用卡，直接在 bigmodel.cn 注册即可获取 API Key。
+
+### 测试结果（2026-05-14）
+- endpoint: `https://open.bigmodel.cn/api/paas/v4/chat/completions`
+- model: `glm-4v-flash`
+- base64 图片直接支持（无需 OSS 上传）
+- 响应示例：正确识别"纯红色背景图"
+- API Key 位置：`/opt/data/.env` 中的 `GLM_API_KEY`
+
+### Hermes 配置
+
+**Step 1: 在 auth.json 的 credential_pool 中添加 zhipuai 条目**
+```json
+"zhipuai": {
+  "api_key": "从 GLM_API_KEY env 读取"
+}
+```
+
+**Step 2: 添加 vision 模型映射**
+在 `agent/auxiliary_client.py` 的 `_PROVIDER_VISION_MODELS` 中添加：
+```python
+"zhipuai": "glm-4v-flash",
+"zhipuai-vision-1": "glm-4.1v-thinking-flash",  # 更强推理能力
+```
+
+**Step 3: 添加到 auto 检测顺序**
+在 `_VISION_AUTO_PROVIDER_ORDER` 中添加 `"zhipuai"`（免费，优先于付费方案）
+
+**Step 4: 重启生效**
+```bash
+systemctl --user restart hermes-gateway
+```
+
+### 测试命令
+```bash
+curl -X POST "https://open.bigmodel.cn/api/paas/v4/chat/completions" \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "glm-4v-flash",
+    "messages": [{"role": "user", "content": [
+      {"type": "text", "text": "描述这张图片"},
+      {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+    ]}]
+  }'
+```
+
+### vs MiniMax VLM
+
+| 对比项 | GLM-4V-Flash | MiniMax VLM |
+|--------|-------------|-------------|
+| 费用 | 免费 | Token Plan 付费 |
+| base64 支持 | ✅ 直接支持 | ❌ 需 OSS 上传 |
+| 端点 | OpenAI 兼容 | 专用 VLM 端点 |
+| 速度 | 约 1-2 秒 | 约 1-2 秒 |
+
+## Xiaomi Token Plan（多模型免费套餐）
+
+### 背景
+ Xiaomi Token Plan 提供多个免费模型，包括多模态模型 `mimo-v2.5`（文本+图像理解）。有效期约至 5 月 31 日，到期后自动切换到 Nous Portal free tier。
+
+### 关键发现（2026-05-14 修正）
+
+**⚠️ `XIAOMI_BASE_URL` 不能有 `/anthropic` 后缀！**
+- 错误：`https://token-plan-cn.xiaomimimo.com/anthropic`（Anthropic 格式，会 404）
+- 正确：`https://token-plan-cn.xiaomimimo.com/v1`（OpenAI 格式，✅ 可用）
+
+Hermes OpenAI-format client 调 `/v1/chat/completions`，如果 base URL 带 `/anthropic`，实际请求会发到 `/anthropic/v1/chat/completions` → 404。
+
+### API Key 信息
+- 长度：51 字符
+- 前缀：`tp-cfqp8`
+- 位置：`/opt/data/.env` 中的 `XIAOMI_API_KEY`
+
+### 测试命令
+```bash
+curl -s "https://token-plan-cn.xiaomimimo.com/v1/chat/completions" \
+  -H "Authorization: Bearer $XIAOMI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "mimo-v2.5", "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]}'
+```
+
+### Hermes 配置
+
+**Step 1: 修改 `.env`**
+```
+XIAOMI_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1
+```
+
+**Step 2: 在 `_API_KEY_PROVIDER_AUX_MODELS` 中添加 xiaomi**
+```python
+"xiaomi": "mimo-v2.5",  # Xiaomi Token Plan (multimodal, free)
+```
+
+**Step 3: 在 `_PROVIDER_VISION_MODELS` 中更新 xiaomi 映射**
+```python
+"xiaomi": "mimo-v2.5",  # Token Plan 多模态模型（不是 mimo-v2-omni）
+```
+
+### 模型说明
+- `mimo-v2.5`：多模态模型，同时支持文本对话和图像理解，Token Plan 免费
+- `reasoning_content` 字段：模型推理内容在此字段返回（不是 `content`）
+
+### vs MiniMax VLM
+
+| 对比项 | GLM-4V-Flash | MiniMax VLM |
+|--------|-------------|-------------|
+| 费用 | 免费 | Token Plan 付费 |
+| base64 支持 | ✅ 直接支持 | ❌ 需 OSS 上传 |
+| 端点 | OpenAI 兼容 | 专用 VLM 端点 |
+| 速度 | 约 1-2 秒 | 约 1-2 秒 |
+
+## Xiaomi Token Plan（多模型免费套餐）
 
 除了 vision 图像理解，Hermes 也支持添加自定义 OCR 服务。
 

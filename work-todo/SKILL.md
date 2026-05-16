@@ -1,12 +1,35 @@
 ---
 name: Work Todo
 slug: work-todo
-version: 1.1.0
-description: "管理工作待办事项，支持添加、查看、完成、删除待办"
+version: 1.2.0
+description: "管理工作待办事项，支持添加、查看、完成、删除待办。任务按用户隔离，每人只能看自己的任务。"
 metadata: {"emoji": "📋"}
 ---
 
 # Work Todo - 工作待办管理
+
+## 用户识别与隔离
+
+### 用户映射
+- 映射文件：`/opt/data/hermes/family-ledger/user-mapping.json`
+- 格式：`{"ou_xxx": "显示名", ...}`
+- 从当前会话的 openid 查找对应显示名
+
+### 未知 openid 处理流程
+当 openid 不在 user-mapping.json 中时：
+1. **先确认是否 openid 变化**：询问"你之前用过这个账号吗？还是第一次使用？"
+2. **排除旧用户换号的情况**：如果用户说"我是 XXX"，检查 user-mapping.json 中是否有同名用户，如有则说明可能是 openid 变了，直接更新映射
+3. **确认是新用户后**：询问"你希望怎么称呼？"，得到名字后经用户同意写入 user-mapping.json
+
+### 任务隔离规则（严格）
+- **每个人只能查看和操作自己创建的任务**
+- 查看任务列表时，自动过滤只显示当前用户的任务
+- 禁止查看、修改、删除其他用户的任务
+- 汇报时也只汇报当前用户的任务
+
+### 新旧数据兼容
+- 已有任务没有 `created_by` 字段的，视为创建它的 openid 对应用户所有
+- 新建任务必须写入 `created_by` 字段（存显示名，与 `recorded_by` 保持一致）
 
 ## 数据存储
 
@@ -19,7 +42,7 @@ metadata: {"emoji": "📋"}
 {
   "todos": [
     {
-      "id": "202603231030",
+      "id": "20260323103045",
       "content": "设计稿提交",
       "task_name": "设计稿提交",
       "task_description": "提交三亚一期项目的设计稿终稿",
@@ -31,6 +54,7 @@ metadata: {"emoji": "📋"}
       "status": "进行中",
       "progress": [],
       "created": "2026-03-23T10:30:00+08:00",
+      "created_by": "设计虱",
       "completed": null,
       "completion_date": null,
       "assessment": null
@@ -40,7 +64,7 @@ metadata: {"emoji": "📋"}
 ```
 
 **字段说明**:
-- `id`: 唯一标识，使用时间戳前10位
+- `id`: 唯一标识，14位时间戳 `datetime.now().strftime("%Y%m%d%H%M%S")`
 - `content`: 待办内容（简短描述）
 - `task_name`: 任务名称（概括这个任务）
 - `task_description`: 任务说明（详细描述）
@@ -52,9 +76,10 @@ metadata: {"emoji": "📋"}
 - `status`: 状态（进行中 / 暂缓 / 已完成）
 - `progress`: 进展记录，支持两种格式：
   - 字符串格式（推荐）：如 `"4月1日已联系张丽问设计单位"`
-  - 数组格式：`[{"date": "202604180000", "content": "与宋兴源沟通从内地进货问题"}]`
+  - 数组格式：`[{"date": "20260418000000", "content": "与宋兴源沟通从内地进货问题"}]`
   - **重要**：汇报展示时需兼容两种格式
 - `created`: 创建时间
+- `created_by`: 创建人显示名（从 user-mapping.json 查 openid 得到）
 - `completed`: 完成时间（ISO格式，带时间）
 - `completion_date`: 完成日期（仅日期，格式 YYYY-MM-DD）
 - `assessment`: 考核结果
@@ -92,17 +117,30 @@ metadata: {"emoji": "📋"}
 ## 操作规范
 
 ### 读取
-```
+```python
 import json
 from pathlib import Path
 
 TODO_FILE = Path("/opt/data/hermes/work-todo/todos.json")
+USER_MAPPING_FILE = Path("/opt/data/hermes/family-ledger/user-mapping.json")
 
 def load_todos():
     if not TODO_FILE.exists():
         return {"todos": []}
     with open(TODO_FILE, 'r', encoding='utf-8') as f:
         return json.load(f)
+
+def get_user_display_name(openid):
+    """从 user-mapping.json 查显示名"""
+    if not USER_MAPPING_FILE.exists():
+        return None
+    with open(USER_MAPPING_FILE, 'r', encoding='utf-8') as f:
+        mapping = json.load(f)
+    return mapping.get(openid)
+
+def filter_user_todos(todos, display_name):
+    """只返回当前用户的任务"""
+    return [t for t in todos if t.get("created_by") == display_name]
 ```
 
 ### 保存
@@ -114,10 +152,11 @@ def save_todos(data):
 ```
 
 ### 添加待办
-1. 生成 ID：时间戳前10位 `datetime.now().strftime("%Y%m%d%H%M")[:10]`
+1. 生成 ID：`datetime.now().strftime("%Y%m%d%H%M%S")`（14位，含秒，防同一分钟内重复）
 2. 匹配项目：根据项目名称或别名查找正式名称和地点
 3. 解析日期：`due_date` 解析用户说的截止日期；`start_date` 未说明则默认今天
-4. 写入 todos 数组
+4. 写入 `created_by`：从 user-mapping.json 用当前 openid 查显示名
+5. 写入 todos 数组
 
 ### 完成待办
 1. 查找对应待办（按项目名+内容匹配）
@@ -229,7 +268,8 @@ def get_progress_text(t):
 
 ## 注意事项
 
-- ID 使用时间戳前10位
+- ID 使用14位时间戳 `strftime("%Y%m%d%H%M%S")`，含秒防重复
 - 日期格式：YYYY-MM-DD（具体日期）或"长期任务"
 - 项目名称必须从列表中选择，别名自动转换
 - 任务名称默认等于内容，任务说明为可选项
+- **任务按用户隔离**：每个人只能看自己的任务，创建时必须写入 `created_by`

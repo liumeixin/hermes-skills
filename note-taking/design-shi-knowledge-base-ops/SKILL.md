@@ -150,3 +150,41 @@ relates_to:
 - `[invented_by, [人名]]` — 由某人发明
 - `[relates_to, [实体/概念]]` — 相关
 - `[supersedes, [旧实体]]` — 取代了某个旧实体
+
+---
+
+## 知识库向量化
+
+知识库 wiki/ 下的页面已全量向量化，支持语义检索（与 FTS5 关键词检索互补）。
+
+### 脚本与配置
+
+- **脚本**：`/opt/data/scripts/wiki_embed.py`
+- **数据库**：`/opt/data/state.db` 的 `wiki_embeddings` 表
+- **向量化模型**：`herald/dmeta-embedding-zh`（768维，195MB，通过 Ollama 本地运行）
+- **定时任务**：`wiki-embed-daily`，每天凌晨 04:00 增量执行
+- **日志**：`/opt/data/scripts/wiki_embed.log`
+
+### 使用方式
+
+```bash
+# 增量模式（只处理新增/修改的文件，按 mtime 判断）
+python3 /opt/data/scripts/wiki_embed.py
+
+# 全量模式（重新向量化所有文件）
+python3 /opt/data/scripts/wiki_embed.py --full
+```
+
+### 关键设计决策
+
+1. **知识库页面直接 embedding，不需要摘要预处理**——因为知识库每页都是人工整理的高密度信息，信噪比接近 100%，不像聊天记录有 63% tool 噪声
+2. **长文本切片**：dmeta 上下文窗口 1024 tokens，超过 500 字符的页面按句子边界切片（overlap=50），分别 embedding 后取平均向量
+3. **增量更新**：比较文件 mtime 与数据库 updated_at，未变化的跳过
+4. **跳过特殊文件**：index.md、log.md、hot.md 不向量化
+
+### 踩坑记录
+
+- dmeta 必须用 Ollama 原生端点 `/api/embeddings` + `prompt` 参数，不支持 `/v1/embeddings` + `input`
+- N5105 上单次 embedding 约 17-22 秒，68 个页面全量约 50 分钟
+- 不需要并行，N5105 4 核已满载，串行是最优解
+- 超时设为 120 秒（长文本切片后单 chunk 仍在 17-22 秒范围内）

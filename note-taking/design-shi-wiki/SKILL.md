@@ -405,6 +405,35 @@ elif 'relates_to:' in fm_text:
 
 ### 常见 frontmatter 错误模式
 
+## 知识库向量化
+
+wiki/ 下所有页面已通过 `wiki_embed.py` 向量化，支持语义检索。
+
+### 架构
+- **脚本**：`/opt/data/scripts/wiki_embed.py`
+- **数据库表**：`wiki_embeddings`（page_path, page_title, content_text, embedding, updated_at）
+- **向量模型**：herald/dmeta-embedding-zh（768维，Ollama 本地部署）
+- **定时任务**：每天凌晨 4:00 全量 re-embed（cron ID 待确认）
+
+### 使用方式
+```bash
+# 增量模式（只处理新增/修改的文件，按 mtime 比较）
+python3 /opt/data/scripts/wiki_embed.py
+
+# 全量模式（重新向量化所有文件）
+python3 /opt/data/scripts/wiki_embed.py --full
+```
+
+### ⚠️ 关键坑点：切片
+herald/dmeta-embedding-zh 上下文窗口 **1024 tokens（约 500 中文字符）**。超过此长度的页面会 500 错误或超时。
+
+脚本已内置切片逻辑：长文本按 500 字符（句子边界）切分，分别 embedding 后取平均向量。**不要去掉切片逻辑**。
+
+### 检索方式
+知识库检索为混合模式：FTS5 全文搜索（关键词）+ 向量相似度（语义），按 page_path 去重合并。
+
+---
+
 ## 注意事项
 
 * 用户是建筑师，AI Agent 是园丁

@@ -154,6 +154,24 @@ curl -s -X POST \
   -d '{"owner": "'"$GH_USER"'", "name": "my-new-app", "private": false}'
 ```
 
+### ⚠️ Critical: default_branch Cannot Be Set Before First Push
+
+When creating a repo via API, you **cannot** set `default_branch` to a branch that doesn't exist yet — GitHub will return `422 Validation Failed: The branch main was not found`.
+
+**Correct order**:
+1. Create repo via API → defaults to "master"
+2. `git init`, `git add`, `git commit` locally
+3. `git remote add origin ...`
+4. `git push -u origin main` (push your desired branch first)
+5. Then `curl PATCH /repos/$OWNER/$REPO -d '{"default_branch":"main"}'`
+
+**Wrong order**:
+```bash
+# ❌ This fails: main doesn't exist yet
+curl -X PATCH .../repos/$OWNER/$REPO -d '{"default_branch":"main"}'
+# → 422 "The branch main was not found"
+```
+
 ## 3. Forking Repositories
 
 **With gh:**

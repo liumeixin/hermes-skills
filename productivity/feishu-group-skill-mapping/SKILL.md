@@ -13,6 +13,7 @@ description: 飞书群ID到默认技能的映射，根据群ID自动加载对应
 | oc_2abe398e83a9758c72451ed260170088 | 记账群 | family-ledger |
 | oc_8347b8254e75fc9478514ca4c8792291 | 知识库群 | design-shi-wiki |
 | oc_acee98982b2678ce4aaa8c99ff7ff4f6 | 编程群 | (待定) |
+| oc_d30f6454cc4d56b3d305282abf390d96 | 个人待办群 | personal-task |
 
 ## 使用场景
 当用户在某个群发消息时，根据群 ID 自动加载对应技能。
