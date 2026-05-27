@@ -144,6 +144,30 @@ Comic Progress:
 - [ ] Step 8: Completion report
 ```
 
+### Verification Checkpoints
+
+#### 检查点：Step 2 确认前
+- [ ] analysis.md 是否已生成？（Step 1.1 完成）
+- [ ] 用户的选项（art/tone/layout/aspect）是否已明确记录？
+- [ ] 是否选择了部分工作流模式？
+
+#### 检查点：Step 3 Storyboard 生成后
+- [ ] 每页都有：场景描述、对白、视觉要素、分镜指示？
+- [ ] 总页数合理（3-20页）？
+- [ ] 角色列表完整（每个角色有名称 + 外貌描述）？
+
+#### 检查点：Step 5 Prompts 生成后
+- [ ] 每个 prompt 文件 `prompts/NN-*.md` 都已生成？
+- [ ] 每个 prompt 都嵌入了角色描述（来自 `characters/characters.md`）？
+- [ ] aspect_ratio 与 storyboard 一致（3:4→portrait, 4:3→landscape）？
+- [ ] references 中提取的 traits 已附加到 prompt body？
+
+#### 检查点：Step 7 图片生成后
+- [ ] 每张图片已下载到本地（不是只有 URL）？
+- [ ] curl -o 使用了**绝对路径**？（防 CWD 漂移）
+- [ ] 文件非空且可打开？
+- [ ] 生成页数与 storyboard 总数一致？
+
 ### Flow
 
 ```

@@ -166,6 +166,32 @@ ${html}
 }
 ```
 
+## 网格/方格背景实现
+
+微信公众号中实现网格纸效果，必须用双层 `linear-gradient`，**不能用** `repeating-linear-gradient`（微信不支持）。
+
+```css
+#wenyan {
+    background-color: #ffffff;
+    background-image:
+        linear-gradient(rgba(200, 200, 200, 0.25) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200, 200, 200, 0.25) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+```
+
+- 第一层：水平线（`transparent 1px` 为间距）
+- 第二层：垂直线（`90deg`）
+- `rgba(200,200,200,0.25)` 控制网格线颜色深浅，0.25 为淡灰色
+- `20px 20px` 控制网格间距
+- 备注蓝主题（notebook-blue.css）也用同样写法，只是颜色改为 `rgba(87, 107, 149, 0.15)` 蓝灰色调
+
+## 剪贴板读取的焦点问题
+
+`navigator.clipboard.read()` 需要**页面处于焦点状态**。DevTools 控制台打开时焦点在控制台而非页面，会导致 `NotAllowedError`。
+
+**解决**：先用鼠标点击页面区域让其获得焦点，再在控制台执行代码。
+
 ## 逆向分析其他工具的方法
 
 用 F12 拦截目标工具的剪贴板输出，确认其实现方式：

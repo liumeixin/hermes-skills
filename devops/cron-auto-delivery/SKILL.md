@@ -27,6 +27,18 @@ Instead, put the intended message content directly in the final `print()` / resp
 - Sending to a **different** target than the one configured for auto-delivery
 - Sending a **supplemental** message to a different channel (e.g., cron computes stats, sends to Feishu, but also sends a Slack summary)
 
+## Feishu Content Formatting (飞书兼容性)
+
+When a cron job delivers to Feishu, the **prompt** must explicitly forbid markdown tables — Feishu's API rejects `{table}` tags with error `[230001] wrong tag:{table}`.
+
+Add this to the cron prompt for any Feishu-delivered job:
+
+```
+重要：最终回复禁止使用 markdown 表格（飞书不支持），用代码块或纯文本代替。
+```
+
+Also avoid other unsupported tags: HTML tables, `{callout}`, `{tabs}`. Safe formats: plain text, code blocks, bullet lists.
+
 ## Verification
 
 Tested on: `feishu:oc_2abe398e83a9758c72451ed260170088`

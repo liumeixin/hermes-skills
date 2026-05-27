@@ -1,10 +1,12 @@
 ---
 name: Work Todo
 slug: work-todo
-version: 1.2.0
+version: 1.2.1
 description: "管理工作待办事项，支持添加、查看、完成、删除待办。任务按用户隔离，每人只能看自己的任务。"
 metadata: {"emoji": "📋"}
 ---
+
+> ⚠️ **飞书兼容性**：输出**禁止使用 Markdown 表格**（飞书不支持）。请使用纯文本+emoji 格式，或使用列表。
 
 # Work Todo - 工作待办管理
 

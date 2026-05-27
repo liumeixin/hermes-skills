@@ -87,6 +87,70 @@ from dotenv import load_dotenv
 load_dotenv()  # 加载 /opt/data/.env
 ```
 
+## 问题 5: auth.json 凭证腐败导致 401
+
+**症状**: Vision 调用返回 401 令牌过期，但 API Key 实际有效
+
+**原因**: auth.json 中存在旧的/腐败的凭证记录，且 access_token 被错误重复（如 `xxx...xxx...xxx`）
+
+**排查**:
+```bash
+cd /opt/hermes && source .venv/bin/activate && python -c "
+from agent.credential_pool import read_credential_pool
+pool = read_credential_pool()
+for p, creds in pool.items():
+    if 'glm' in p.lower() or 'zhipu' in p.lower():
+        print(f'{p}:')
+        for c in creds:
+            token = c.get('access_token', 'N/A')
+            print(f'  - {c.get(\"label\")}: {token}')
+"
+```
+
+**检查 auth.json**:
+```bash
+cat /opt/data/auth.json | python -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get('credential_pool',{}).get('zai',[]), indent=2))"
+```
+
+**修复**:
+1. 清空 zai/zhipuai 相关的腐败凭证：
+```python
+import json
+with open('/opt/data/auth.json', 'r') as f:
+    data = json.load(f)
+for provider in ['zai', 'zhipuai']:
+    if provider in data['credential_pool']:
+        for cred in data['credential_pool'][provider]:
+            cred['access_token'] = ''
+            cred['last_status'] = None
+            cred['last_error_code'] = None
+            cred['last_error_message'] = None
+with open('/opt/data/auth.json', 'w') as f:
+    json.dump(data, f, indent=2)
+```
+
+## 问题 6: 配置更新后 Hermes 不会自动热加载
+
+**症状**: 已修复上述所有问题，但 vision 调用仍然失败（api_key 显示 no-key-required）
+
+**原因**: Python 进程启动时加载环境变量，后续修改 .env 不会自动刷新
+
+**解决**: 必须重启 Hermes 容器
+```bash
+docker restart hermes
+```
+
+重启后验证：
+```bash
+cd /opt/hermes && source .venv/bin/activate && python -c "
+from agent.auxiliary_client import resolve_vision_provider_client
+provider, client, model = resolve_vision_provider_client()
+print(f'Provider: {provider}')
+print(f'Client api_key: {client.api_key}')
+"
+```
+api_key 应该显示实际的 key 而不是 "no-key-required"
+
 ## 问题 4: MiniMax 返回 404 找不到端点
 
 **症状**: 

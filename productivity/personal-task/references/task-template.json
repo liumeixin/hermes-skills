@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "id": "202605150900",
+      "assignee": "设计虱",
+      "openid": "ou_9eb31071c1a39252e0fc315fabf9d65c",
+      "item": "整理书房",
+      "start_time": "2026-05-15",
+      "status": "进行中",
+      "progress": [
+        {"date": "2026-05-15", "content": "买了收纳盒，先把书分类"}
+      ],
+      "completed": null
+    }
+  ]
+}

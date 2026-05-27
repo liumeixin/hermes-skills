@@ -95,12 +95,17 @@ doc.save('output.docx')
 from docx.shared import Inches
 
 # 添加图片
-doc.add_picture('image.png', width=Inches(5))
+doc.add_picture('image.png', width=Inches(5.5))
 
 # 图片居中
 last_paragraph = doc.paragraphs[-1]
 last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 ```
+
+**OSS 外链图片注意事项**：
+- 微信公众号/自媒体文章的图片 URL 常带 `.png!2.webp` 后缀，实际是 webp 格式
+- python-docx 不支持 webp，需先用 Pillow 转为 PNG
+- 转换脚本：`/opt/data/scripts/md2docx.py`，自动下载+格式转换+嵌入 docx
 
 ## 常见陷阱
 

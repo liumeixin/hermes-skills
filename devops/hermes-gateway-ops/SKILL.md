@@ -1,6 +1,7 @@
 ---
 name: hermes-gateway-ops
 description: Hermes Gateway 运维操作 — 重启、飞书平台代码关键位置、热修改生效
+notes: 本 skill 包含配置示例和表格，在飞书等不支持 markdown 表格的平台，请用代码块格式重述。
 ---
 
 ## 群晖 Docker 部署代码修改生效流程
@@ -95,8 +96,9 @@ hermes gateway run --replace &
 
 修改以下内容后，**不需要重启 Hermes**，下次 API 调用时自动生效：
 - `config.yaml` 配置变更
-- `.env` 中的 API endpoint 修改（如 `XIAOMI_BASE_URL`）
-- `auxiliary_client.py` 中的模型映射
+- `.env` 中的 API endpoint 修改
+- `auxiliary_client.py` 中的模型映射（主模型、辅助模型、vision 模型等）
+- 任何 Python 文件中的配置类修改（`_PROVIDER_XXX` 字典等）
 
 只有修改飞书平台代码（`feishu.py`）后，才需要重启：
 ```bash
@@ -123,52 +125,105 @@ hermes gateway run --replace
   PATH="/opt/hermes/.venv/bin:$PATH" hermes gateway status
   ```
 
-## 对话"失忆"排查（上下文压缩故障）
+### ⚠️ 配置文件唯一路径（易混淆）
 
-### 症状
-在飞书群聊中跟 Agent 对话，聊了几轮后突然"忘记"之前的内容。表现：
-- 刚交代的任务下一轮就不记得了
-- 问它之前的进展，回答"请提供更多信息"
-- 频率很高，不是偶发
+`get_hermes_home()` 返回 **`/opt/data`**（不是 `/opt/data/home` 也不是 `/root`），所以：
 
-### 根因
-**推理模型（reasoning/thinking model）做压缩摘要会报错，导致会话被 auto-reset。**
+- **`/opt/data/config.yaml`** — ✅ **唯一权威配置**（394行完整配置），Gateway 和所有插件都读这个
+- **`/opt/data/hermes/config.yaml`** — ❌ **不存在或为孤立片段**（可能只有 2 行 memory 配置），没有任何代码读取
+- **`/opt/hermes/`** — ❌ **代码安装目录**，不含 config.yaml（只有 cli-config.yaml）
 
-排查路径：
-1. 打开日志 `grep -i 'compress\|Failed.*summary\|auto-reset\|exhaustion' /opt/data/logs/agent.log`
-2. 如果看到 `Failed to get summary response: Error code: 400 'The reasoning_content in the thinking mode must be passed back to the API.'` → 就是这个问题
-3. 如果看到 `Context compression failed after 3 attempts. Auto-resetting session after compression exhaustion.` → 确认
+**编辑配置只看 `/opt/data/config.yaml`，不要在其他位置找。**
 
-### 原理
-- Hermes 的上下文压缩在 token 达到阈值时触发，调用 auxiliary 模型对中间轮次生成摘要
-- 如果 auxiliary.compression 配置为 `auto`，系统会用主模型做摘要
-- 主模型是推理模型（mimo-v2.5、DeepSeek-R1、QwQ 等）时，Xiaomi/各厂商 API 要求调用时必须传回上一轮的 `reasoning_content`
-- 压缩摘要是独立的单轮调用，不携带历史 reasoning_content → API 400 → 重试 3 次失败 → compression_exhausted → auto-reset → 上下文清零
+验证方法：
+```bash
+# 确认 get_hermes_home() 返回值
+/opt/hermes/.venv/bin/python3 -c "from hermes_cli.config import get_hermes_home; print(get_hermes_home())"
+# 输出: /opt/data
+```
 
-### 修复
-在 `config.yaml` 中给压缩任务指定独立的非推理模型：
+## Hermes Auxiliary 模型配置（完整指南）
+
+### 三个辅助模型配置
+
+在 `config.yaml` 的 `auxiliary` 节点下配置：
 
 ```yaml
 auxiliary:
-  compression:
-    provider: zhipuai          # 不要用 auto
-    model: glm-4.5-flash       # 非推理模型，做摘要没问题
-    base_url: https://open.bigmodel.cn/api/paas/v4
-    api_key_env: GLM_API_KEY   # 从 .env 读取
-    timeout: 120
+  vision:        # 看图（图生文）必需多模态模型
+    provider: ecloud
+    model: Minimax-M2.5  # 纯文本，不支持看图！
+    # 如果需要看图，用 glm-4v-flash（需配置 ZHIPU_API_KEY）
+
+  compression:   # 上下文压缩，必须用非推理模型
+    provider: ecloud
+    model: Minimax-M2.5  # 推理模型会报错导致"失忆"
+    # 建议用 glm-4.5-flash（需配置 ZHIPU_API_KEY）
+
+  web_extract:   # 网页提取，auto 即可
+    provider: auto
 ```
 
-同时建议调整压缩参数：
+### 常见错误及解决方案
+
+#### 1. vision 报错 "is not a multimodal model"
+- **原因**：配置的主模型（如 MiniMax-M2.5）只能处理文字，不支持看图
+- **错误信息**：`'/workspace/cache/aiops-model/aiops-model/base/MiniMax-M2.5 is not a multimodal model'`
+- **解决**：给 vision 配置独立的多模态模型，如 glm-4v-flash
+
+#### 2. compression 导致"失忆"
+- **原因**：推理模型做压缩摘要需要传回 reasoning_content，但压缩是独立单轮调用
+- **错误信息**：`'The reasoning_content in the thinking mode must be passed back to the API.'`
+- **解决**：compression 必须用非推理模型（如 glm-4.5-flash）
+
+#### 3. 401 令牌过期错误
+- **原因**：配置的 API Key 无效或已过期
+- **错误信息**：`'令牌已过期或验证不正确' (code: 401)`
+- **解决**：检查 api_key 是否正确配置，或改用有效的模型
+
+### ⚠️ 重要：Docker 容器环境变量更新
+
+当 Hermes 运行在 Docker 容器中时，直接在宿主机上创建 `.env` 文件**不会生效**，因为容器内的进程无法读取宿主机的 .env 文件。
+
+**正确做法（二选一）**：
+
+1. **通过群晖 Docker 界面更新**：
+   - 容器 → 编辑 → 环境变量
+   - 添加或更新 `GLM_API_KEY=your-new-key`
+
+2. **通过 SSH 命令更新**（临时，重启后失效）：
+   ```bash
+   # 方式A：重启容器时带上新环境变量（需要先停止容器）
+   docker stop hermes && docker run --env GLM_API_KEY=your-key ... hermes
+   
+   # 方式B：通过群晖修改容器配置后重新启动
+   ```
+
+**验证是否生效**：在容器内执行 `env | grep GLM_API_KEY` 确认能看到 key。
+
+### 配置原则
+
+| 任务类型 | 模型要求 | 推荐模型 |
+|---------|---------|---------|
+| vision 看图 | 多模态模型 | glm-4v-flash |
+| compression 压缩 | 非推理模型 | glm-4.5-flash |
+| web_extract | 任意文本模型 | auto |
+
+**如果只有 MiniMax-M2.5**：必须放弃看图功能，compression 可能会导致失忆（取决于 API 是否严格检查 reasoning_content）。
+
+## providers.context_length 控制定价档位
+
+mimo-v2.5 等模型有分段定价（≤256K 便宜，256K-1M 贵一倍）。在 `config.yaml` 的 `providers` 中设置 `context_length` 可以限制上下文窗口，锁在便宜档：
+
 ```yaml
-compression:
-  threshold: 0.75        # 从 0.5 调高，减少触发频率
-  protect_last_n: 30     # 从 20 调高，保护更多近期消息
+providers:
+  xiaomi:
+    base_url: https://token-plan-cn.xiaomimimo.com/v1
+    api_key_env: XIAOMI_API_KEY
+    context_length: 256000   # 限制为 256K，锁定 ≤256K 价格档
 ```
 
-### 注意
-- 配置改了但已有会话不会重新读取，需要 `/new` 或等自动重置
-- `auto` 辅助模型选择在主模型是推理模型时不可靠，必须显式指定
-- 知识库页面：`wiki/概念/Hermes上下文压缩导致对话遗忘.md`
+生效机制：`get_model_context_length()` 的第 0 步就是读 `custom_providers` 中的 `context_length`，优先级最高。配合 `compression.threshold: 0.75`，压缩在 192K 触发，不会超 256K。
 
 ## 定时任务投递失败排查
 
@@ -195,3 +250,27 @@ last_delivery_error: "Feishu send failed: [230001] ext=invalid receive_id"
 - `send_message list` 显示已连接过的群组，不是所有群组
 - 日志里的 `chat_id` 是最可靠的实际运行时 ID
 - cron 投递必须用 `oc_xxxxx` 格式，不能用群名称
+
+## 飞书私聊回复失败排查（2026-05-23）
+
+### 症状
+- 用户私聊发消息，Hermes 能收到（Inbound 日志有）
+- 没有任何 Outbound 回复
+
+### 根因
+飞书报错 `Your request contains an invalid request parameter, ext=invalid message content, ext=message_content has wrong tag:{table}`
+
+- 回复内容包含 `{table}` 标签（JSON 表格数据），飞书不支持
+- 发送失败后 fallback 到纯文本时，也没有过滤掉这个标签，导致重试也失败
+
+### 排查步骤
+
+1. **查看日志**：`grep -i "send failed\|230001" /opt/data/logs/agent.log | tail -20`
+
+2. **定位代码**：错误检测在 `handler.py`，需要增加 `{table}` 错误识别
+
+3. **修复位置**：`/opt/hermes/app/app/feishu/handler.py`
+   - 扩展错误检测正则，识别 `{table}` 错误
+   - fallback 纯文本转换时，过滤 `{xxx}` 格式的标签
+
+4. **生效**：重启 Gateway `docker restart hermes-gateway`

@@ -1,11 +1,27 @@
 ---
 name: personal-task
 slug: personal-task
-description: "个人任务管理，支持添加、查看、进展、完成任务。自动识别任务人。"
-metadata: {"emoji": "✅"}
+description: |
+  个人任务管理，支持添加、查看、进展、完成任务。自动识别任务人。
+  触发词：「加任务」「新任务」「查任务」「任务进展」「任务完成」「删除任务」「任务列表」。
+  当用户提到要做什么事、添加待办、查看进度、标记完成时使用。
+metadata: {"emoji": "✅", "keywords": ["任务", "待办", "进展", "完成", "个人任务"]}
 ---
 
 # Personal Task - 个人任务管理
+
+## 参考资源
+
+本技能配套以下参考文件（位于 `references/` 目录）：
+
+| 文件 | 用途 |
+|------|------|
+| `references/task-template.json` | 任务记录模板 |
+| `references/checklist.md` | 操作检查清单 |
+
+操作前建议参考 `references/checklist.md` 确认字段完整性。
+
+---
 
 ## 数据存储
 
@@ -89,7 +105,7 @@ def save_tasks(data):
 ```
 
 ### 添加任务
-1. 从 user-mapping.json 根据 openid 获取 assignee 姓名。**如果 openid 不在映射中，回复"未识别用户，请先配置 user-mapping.json"，不要创建任务**
+1. 从 user-mapping.json 根据 openid 获取 assignee 姓名。**如果 openid 不在映射中，列出当前支持的用户让用户选择，不要创建任务**
 2. 生成 ID：`datetime.now().strftime("%Y%m%d%H%M")`，若同 ID 已存在则追加随机后缀（如 `202605150900_a`）
 3. 解析 start_time（未说明则默认今天）
 4. status 默认"进行中"
@@ -98,14 +114,16 @@ def save_tasks(data):
 
 ### 添加进展
 1. 查找对应任务（按 id 或内容模糊匹配）
-2. 进展中的相对时间词转为"x月x日"格式
-3. 未包含日期则自动加当天日期
-4. 追加到 progress 列表
+2. **如果找不到匹配任务，列出当前进行中任务让用户选择**
+3. 进展中的相对时间词转为"x月x日"格式
+4. 未包含日期则自动加当天日期
+5. 追加到 progress 列表
 
 ### 完成任务
-1. 查找对应任务
-2. status 设为"已完成"
-3. completed 设为当前时间（ISO格式）
+1. 查找对应任务（按 id 或内容模糊匹配）
+2. **必须先确认**：「确认要把「XXX」标记为完成吗？」
+3. 确认后 status 设为"已完成"
+4. completed 设为当前时间（ISO格式）
 
 ### 查看任务
 - 默认查看当前用户的任务

@@ -3,6 +3,7 @@ name: design-shi-knowledge-base-ops
 description: 设计虱知识库运维操作 — raw文章批量入库、来源页/概念页/实体页创建规范、自检脚本
 tags: [knowledge-base, design-shi, ingestion]
 created: 2026-05-14
+notes: 本 skill 包含的表格是为阅读友好设计的，在飞书等不支持 markdown 表格的平台，请用代码块格式重述表格内容。
 ---
 
 # 设计虱知识库运维操作
@@ -21,6 +22,18 @@ wiki/
 ```
 
 ## 入库标准流程
+
+### ⛔ 重要前提：IMA vs 本地知识库
+
+| 知识库 | 维护者 | 操作 |
+|--------|--------|------|
+| IMA (ima.qq.com) | 其他智能体（自动抓取/整理） | **只读**，定期读取已整理的笔记 |
+| 本地知识库 (/opt/data/workspace/设计虱-知识库/) | 我（Hermes） | 写入，包含来源页/概念页/实体页 |
+
+**关键规则**：
+- 不要往 IMA 写入任何内容
+- 用户说"入库" = 直接按下面流程录入本地知识库，不需要经过 IMA
+- 只有从 IMA 读取已整理好的笔记时才涉及 IMA（ima-skill）
 
 ### Step 1：扫描 raw 目录
 
@@ -182,8 +195,16 @@ python3 /opt/data/scripts/wiki_embed.py --full
 3. **增量更新**：比较文件 mtime 与数据库 updated_at，未变化的跳过
 4. **跳过特殊文件**：index.md、log.md、hot.md 不向量化
 
+### Cron 执行经验
+
+- 每个页面 embedding 约 1.5-2 分钟（含 API 调用 + 写入），4 个新页面约 16 分钟
+- **前台 300s 超时不够**：4 个新页面就刚好踩线。超过 5 个新页面应改用 `background=true` + `notify_on_complete=true`
+- `wait` 工具最大 clamped 到 60s，长任务必须用 `tail -f` 或 `tail -20` 检查日志进度
+- 日志中每条记录出现两次是因为多个 cron 实例同时写入（正常现象，幂等操作）
+
 ### 踩坑记录
 
+- **⚠️ patch 工具更新 log.md 会产生 `@@` 残留**：用 `patch` 的 patch 模式追加 log.md 条目时，多次出现 diff 标记 `@@` 被写入文件的 bug。修复方法：log.md 追加改用 Python `str.replace()` 或 `read_file + write_file` 全量写入。index.md 的 patch 操作正常，不受影响。
 - dmeta 必须用 Ollama 原生端点 `/api/embeddings` + `prompt` 参数，不支持 `/v1/embeddings` + `input`
 - N5105 上单次 embedding 约 17-22 秒，68 个页面全量约 50 分钟
 - 不需要并行，N5105 4 核已满载，串行是最优解

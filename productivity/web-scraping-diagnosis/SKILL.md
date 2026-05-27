@@ -99,6 +99,37 @@ const { chromium } = require('playwright');
 
 ---
 
+### 7. SPA 内容提取（浏览器不可用时的后备方案）
+
+当 Playwright 不可用（如缺少 `libnspr4.so`）且页面是 JS 渲染的 SPA 时，可以从 JS bundle 中提取嵌入的内容。
+
+**识别特征**：curl 抓到的 HTML 只有空 `<div id="root"></div>` 和一个 `<script src="assets/xxx.js">`，没有实际内容。
+
+**提取流程**：
+
+```bash
+# 1. 下载 JS bundle
+curl -sL 'https://example.com/assets/index-xxx.js' > /tmp/page.js
+
+# 2. 从 JS 中提取中文内容块（SPA 通常把内容作为字符串嵌入）
+python3 -c "
+import re
+with open('/tmp/page.js','r') as f: content = f.read()
+# 方法A：grep 有意义的中文字符串（50+字符）
+for m in re.finditer(r'[\u4e00-\u9fff]{10,}', content):
+    start, end = max(0, m.start()-80), min(len(content), m.end()+80)
+    print(content[start:end])
+    print('---')
+# 方法B：如果是 JSON 格式嵌入，提取 id/level/content 结构
+blocks = re.findall(r\"content:'((?:[^'\\\\]|\\\\.)*?)'\", content)
+for b in blocks: print(b.encode().decode('unicode_escape'))
+"
+```
+
+**适用场景**：文档站、产品介绍页、博客（部分 SSR 失败时）。内容通常以字符串字面量、JSON 对象或模板字符串形式嵌入 JS。
+
+**局限**：只能提取构建时嵌入的静态内容，动态 API 加载的数据需要找到对应的 fetch 端点。
+
 ## 相关工具
 
 - Playwright 安装路径: `/opt/data/home/.playwright/chromium-1217/chrome-linux64/chrome`

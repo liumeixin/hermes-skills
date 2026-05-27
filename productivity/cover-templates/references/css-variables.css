@@ -1,0 +1,42 @@
+/* 封面模板通用 CSS 变量 */
+
+:root {
+  /* 尺寸 */
+  --cover-wx-width: 1550px;
+  --cover-wx-height: 660px;
+  --cover-xhs-width: 1080px;
+  --cover-xhs-height: 1440px;
+  --cover-xhs-height-v2: 1691px;
+
+  /* 深色主题 */
+  --dark-bg: #121212;
+  --dark-card: #1F1F1F;
+  --dark-border: #222222;
+  --dark-text: #FFFFFF;
+  --dark-text-secondary: #A0A0A0;
+
+  /* 浅色主题 */
+  --light-bg: #FAFAFA;
+  --light-card: #FFFFFF;
+  --light-border: #E5E5E5;
+  --light-text: #1A1A1A;
+  --light-text-secondary: #666666;
+
+  /* 强调色 */
+  --accent-orange: #FF5A1F;
+  --accent-purple: #7C3AED;
+  --accent-blue: #3B82F6;
+  --accent-green: #10B981;
+  --accent-pink: #EC4899;
+
+  /* 字体 */
+  --font-title: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* 间距 */
+  --spacing-xs: 8px;
+  --spacing-sm: 16px;
+  --spacing-md: 24px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
+}

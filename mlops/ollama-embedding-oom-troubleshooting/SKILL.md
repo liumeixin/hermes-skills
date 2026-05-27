@@ -32,8 +32,34 @@ cat /sys/fs/cgroup/memory.max
 # 3. 检查 Ollama 日志中的 sys=9 kills
 docker logs ollama 2>&1 | grep "signal: killed"
 
-# 4. 检查 Ollama 进程
+### 4. 检查 Ollama 进程
 ps aux | grep -E "ollama|llama" | grep -v grep
+
+### 5. 检查数据库中已存储的向量维度（推断当前模型）
+```python
+import sqlite3
+
+conn = sqlite3.connect('/opt/data/state.db')
+cursor = conn.cursor()
+
+# message_embeddings 向量维度
+cursor.execute("SELECT vector FROM message_embeddings LIMIT 1")
+row = cursor.fetchone()
+if row and row[0]:
+    dim = len(row[0]) // 4
+    print(f"message_embeddings 向量维度: {dim}")
+
+# wiki_embeddings 向量维度
+cursor.execute("SELECT embedding FROM wiki_embeddings LIMIT 1")
+row = cursor.fetchone()
+if row and row[0]:
+    dim = len(row[0]) // 4
+    print(f"wiki_embeddings 向量维度: {dim}")
+
+# 常见维度对应模型：
+# 768 维 → bge-base-zh 或 text2vec-base-chinese
+# 1024 维 → herald/dmeta-embedding-zh 或 bge-m3
+```
 ```
 
 ## 排查方向（按优先级）

@@ -1,6 +1,7 @@
 ---
 name: wechat-markdown-styler
 description: 文言 Markdown 排版器 - 微信公众号/小红书排版工具，支持一键换肤、元素混搭、自定义主题
+notes: 本 skill 包含的表格和 API 说明，在飞书等不支持 markdown 表格的平台，请用代码块格式重述。
 ---
 
 # 文言 Markdown 排版器 (wenyan-editor)
@@ -247,6 +248,61 @@ build.py 通过选择器正则将 CSS 块分类到 18 个维度：
 - **切换逻辑**：`togglePhonePreview()` 函数在 `standalone.html` 和 `index.html` 中同步实现
 - **涉及文件**：`frontend/standalone.html`、`frontend/index.html`（CSS + HTML 按钮 + JS 函数）
 
+### 小红书排版截图模式（2026-05-20 新增）
+
+预览栏有「📷 小红书」按钮，将 Markdown 内容自动分页为小红书图文格式并支持批量导出 PNG。
+
+**架构**：纯前端实现，无需后端改动。通过 CDN 加载 `html-to-image@1.11.11`（DOM→PNG）和 `jszip@3.10.1`（批量打包）。
+
+**分辨率**：440×586（3:4）或 440×440（1:1），模拟手机排版。
+
+**功能**：
+- 自动分页：在隐藏容器中以 440px 宽度渲染 HTML，测量每个块级元素高度，贪心填充分页
+- 支持两种比例：3:4 (440×586) 和 1:1 (440×440)
+- 页面卡片缩略图预览（270×360，CSS transform scale 0.6136x）
+- 单页下载 PNG + 批量下载 ZIP
+- 编辑器内容变化 / 主题切换时实时更新 XHS 预览
+- 手机模式与小红书模式互斥
+
+**分页算法核心**：
+```javascript
+// 1. 创建隐藏测量容器（440px 宽度 + 主题 CSS）
+// 2. 遍历所有顶级块级子元素，测量 offsetHeight
+// 3. 贪心填充：当前页累计高度 + 下一块高度 > (586 - 24px padding) 时换页
+//    padding = Math.round(width * 0.055)，即 440px 时约 24px
+// 4. 返回 HTML 字符串数组，每项为一页内容
+```
+
+**JS 函数清单**（两文件同步）：
+- `toggleXhsMode()` — 切换 XHS 模式
+- `generateXhsPages()` — 生成分页 + 渲染卡片
+- `splitContentIntoPages(html, css, w, h)` — 分页算法
+- `downloadXhsPage(index)` — 单页下载
+- `downloadAllXhsPages()` — 批量 ZIP 下载
+- `getXhsDimensions()` / `updateXhsPreview()` — 配置辅助
+
+**CDN 依赖**：
+```html
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+```
+
+**CSS 关键类**：
+- `#preview-scroll.xhs-mode` — flex 网格布局
+- `.xhs-page-card` — 页面卡片容器
+- `.xhs-page-content` — 440×586 内容区，`transform: scale(0.6136)`
+- `.xhs-toolbar` — 工具栏（比例选择 + 页码 + 下载按钮）
+
+**涉及文件**：`frontend/index.html` 和 `frontend/standalone.html`（CSS + HTML + JS 同步修改）
+
+**踩坑记录**：
+- 小红书图片实际分辨率远低于 1080px，按 440×586 更接近手机屏幕模拟效果
+- padding 必须按宽度比例动态计算（5.5%），硬编码 60px 在小分辨率下太大
+- **图床图片不显示**（2026-05-20 修复）：两个根因 + 修复方案：
+  1. **CSS 缺失**：页面卡片中需要 `img { max-width:100%; height:auto; display:block; }` 否则图片不自适应 440px 容器。同时加 `pre { white-space:pre-wrap; }` 和 `table { table-layout:fixed; word-break:break-all; }` 防溢出
+  2. **测量时图片未加载**：隐藏测量容器中图片异步加载，`offsetHeight` 测量时图片高度为 0，导致分页不准。修复：`splitContentIntoPages` 改为返回 Promise，测量前 `Promise.all(imgPromises)` 等待所有 `img.onload`（含 3s 超时），加载后重新测量再分页。对应 `generateXhsPages` 也要改为 async
+  3. **patch 操作引入多余 `}`**：拼接函数时容易多一个闭合花括号，导致整个 `<script>` 解析失败（所有函数 undefined）。用 `grep -c` 验证函数数量一致性
+
 ## 微信公众号背景兼容性（2026-05-16 最终结论）
 
 **核心结论**：微信公众号编辑器**只支持 `background-color`（纯色）**，所有背景图方案都会被剥离。
@@ -319,3 +375,61 @@ git add -A && git commit -m "..." && git push origin main
 
 ### 文件丢失
 项目曾被 git refactor 清空过 `wenyan-data/`，需从备份恢复或重建
+
+### 图片不显示或显示异常（蓝条、CORS 错误）
+
+**症状**：图床（Aliyun OSS 等）图片在编辑器预览区只显示一条蓝线，或浏览器控制台报 CORS 错误。
+
+**根因**：Aliyun OSS 图片直链没有设置 `Access-Control-Allow-Origin` 响应头，浏览器跨域加载图片时被拦截（Canvas/Image 无法使用跨域图片）。
+
+**修复方案**：添加后端代理接口，前端通过 `/api/image-proxy?url=xxx` 请求后端，后端用 `requests` 请求图片后返回 `bytes`，绕过浏览器跨域限制。
+
+**后端实现（app.py）**：
+```python
+import requests
+from flask import make_response
+
+@app.route('/api/image-proxy')
+def image_proxy():
+    url = request.args.get('url')
+    if not url:
+        return 'Missing url', 400
+    
+    # 验证 URL 必须以 http/https 开头，防止内网访问
+    if not url.startswith(('http://', 'https://')):
+        return 'Invalid URL', 400
+    
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        resp = make_response(r.content)
+        resp.headers['Content-Type'] = r.headers.get('Content-Type', 'image/webp')
+        # 允许前端跨域访问
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp
+    except Exception as e:
+        return f'Failed to fetch image: {e}', 502
+```
+
+**前端调用（index.html/standalone.html）**：
+1. 修复 `normalizeImageUrls` 函数，将图床 URL 替换为代理路径：
+```javascript
+// 添加在 normalizeImageUrls 函数开头（必须放在 renderMarkdown 之前！）
+function normalizeImageUrls(html) {
+    if (!html) return html;
+    // OSS 图片走后端代理，绕过 CORS
+    // 将 https://xxx.oss-cn-beijing.aliyuncs.com/xxx.webp 替换为 /api/image-proxy?url=...
+    const ossHosts = ['oss-cn-beijing.aliyuncs.com', 'oss-cn-hangzhou.aliyuncs.com'];
+    html = html.replace(/https:\/\/([a-z0-9.-]+)\/([^"'\s>]+)/g, (match, host, path) => {
+        if (ossHosts.some(h => host.includes(h))) {
+            return `/api/image-proxy?url=${encodeURIComponent(match)}`;
+        }
+        return match;
+    });
+    return html;
+}
+```
+
+2. 确保 `normalizeImageUrls` 定义在 `renderMarkdown` 调用之前（JavaScript 函数的 hoisting 只对 `function` 声明有效，对函数表达式无效）。
+
+**注意**：不要清理 `!2.webp` 后缀 —— OSS 虚拟 URL 的这个后缀不影响正确识别图片格式，清理反而可能破坏 URL。

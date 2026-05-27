@@ -20,3 +20,4 @@ __pycache__/
 # Temp
 .tmp/
 .cache/
+node_modules/

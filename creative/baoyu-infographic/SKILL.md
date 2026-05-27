@@ -7,6 +7,8 @@ license: MIT
 metadata:
   hermes:
     tags: [infographic, visual-summary, creative, image-generation]
+    keywords: [信息图, 可视化, 高密度信息大图, infographic, visual summary, 布局, 样式, 可视化摘要]
+    triggers: ["做信息图", "信息图", "可视化", "高密度信息大图", "infographic", "visual summary", "可视化摘要"]
     homepage: https://github.com/JimLiu/baoyu-skills#baoyu-infographic
 ---
 
@@ -227,6 +229,49 @@ Report: topic, layout, style, aspect, language, output path, files created.
 - `references/layouts/<layout>.md` — 21 layout definitions
 - `references/styles/<style>.md` — 21 style definitions
 
+## Checkpoints
+
+Verify before advancing to next step:
+
+### CP-Step1: Content Analysis
+- [ ] `analysis.md` saved with: topic, data type, complexity, tone, audience
+- [ ] Source language detected
+- [ ] User design instructions extracted
+
+### CP-Step2: Structured Content
+- [ ] `structured-content.md` saved
+- [ ] All source data preserved verbatim (no summarization)
+- [ ] Secrets/credentials stripped
+
+### CP-Step3: Combination Selection
+- [ ] 3-5 layout×style combos recommended with rationale
+- [ ] Data structure → layout mapping validated
+- [ ] Keyword shortcuts checked first
+
+### CP-Step5: Prompt Generation
+- [ ] `prompts/infographic.md` saved
+- [ ] Layout definition loaded from `references/layouts/<layout>.md`
+- [ ] Style definition loaded from `references/styles/<style>.md`
+- [ ] Base template loaded from `references/base-prompt.md`
+- [ ] All text in confirmed language
+- [ ] Aspect ratio resolved
+
+### CP-Step6: Image Generation
+- [ ] Image generated successfully
+- [ ] Output path saved
+- [ ] Retry attempted on failure
+
+## Error Handling
+
+| Failure | Recovery |
+|---------|----------|
+| Image generation fails | Auto-retry once. If still fails, report error and save prompt for manual retry |
+| Layout file missing | Use `bento-grid` as fallback |
+| Style file missing | Use `craft-handmade` as fallback |
+| Source too long | Extract key sections first, inform user of truncation |
+| Aspect ratio unsupported | Map to nearest named preset (landscape/portrait/square) |
+| Analysis unclear | Ask user to clarify content type before proceeding |
+
 ## Pitfalls
 
 1. **Data integrity is paramount** — never summarize, paraphrase, or alter source statistics. "73% increase" must stay "73% increase", not "significant increase".
@@ -234,3 +279,9 @@ Report: topic, layout, style, aspect, language, output path, files created.
 3. **One message per section** — each infographic section should convey one clear concept. Overloading sections reduces readability.
 4. **Style consistency** — the style definition from the references file must be applied consistently across the entire infographic. Don't mix styles.
 5. **image_generate aspect ratios** — the tool only supports `landscape`, `portrait`, and `square`. Custom ratios like `3:4` should map to the nearest option (portrait in that case).
+
+## 优化摘要
+- 45/70 → 57/70 (81%)
+- Round 1: [D3] 增加 Error Handling 6种故障恢复策略（图片生成失败、模板缺失、源文件过长等）; [D4] 新增 Checkpoints 章节，为7个步骤设置5个检查点，每个包含具体检查项
+- Round 2: [D1] 增加 keywords/triggers 元数据，提升意图识别
+- 新增版本: 1.56.2, 更新日期: 2026-05-27

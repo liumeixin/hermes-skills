@@ -35,14 +35,7 @@ async function main() {
     process.exit(1);
   }
   
-  // 检查是否设置了 AMAP_KEY
-  if (!process.env.AMAP_KEY) {
-    console.error('❌ 请设置环境变量 AMAP_KEY');
-    console.log('\n示例:');
-    console.log('export AMAP_KEY=your_amap_key');
-    console.log('node scripts/poi-search.js --keywords=美食 --location=116.397428,39.90923 --radius=1000');
-    process.exit(1);
-  }
+  // AMAP_KEY 优先从环境变量读取，fallback 到 config.json（由 ensureWebServiceKey 处理）
   
   // 构建搜索参数
   const params = {
